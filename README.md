@@ -119,6 +119,26 @@ header verbatim and adds no prefix of its own.
 `NS_UNITS=mg/dl` (default) or `mmol`. This only affects how values are
 presented; Nightscout is always read in mg/dL and converted on the way out.
 
+## Relationship to Nightscout
+
+This is an independent project. It is not affiliated with, endorsed by, or part
+of the Nightscout Foundation.
+
+Nightscout itself ([cgm-remote-monitor](https://github.com/nightscout/cgm-remote-monitor))
+is licensed **AGPL-3.0**. This server contains no Nightscout code and links no
+Nightscout library — it only makes HTTP requests to a running instance's REST
+API. Consuming an API at arm's length does not create a derivative work, and
+the AGPL's network clause is conditioned on modifying the covered program,
+which this does not do. So Nightscout's copyleft does not extend here, and this
+project is separately licensed.
+
+If you fork this and vendor any Nightscout source into it, that reasoning stops
+applying to your fork.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+Chosen for reach: this is a small connector whose value is that anyone can run
+it in ten minutes. Copyleft would protect nobody in the common case, which is
+one person self-hosting it for their own data.
