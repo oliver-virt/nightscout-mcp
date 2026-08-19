@@ -11,6 +11,36 @@ Ask *"what's my glucose doing?"*, *"how was my time in range this week?"*, or
 > against your CGM, pump and clinician. Readings can be stale, missing, or
 > wrong, and an LLM can misread them.
 
+## What it looks like
+
+> **You:** what has my glucose been doing overnight this past fortnight?
+
+> **Claude:** *(calls `glucose_patterns`)*
+>
+> You're running low in the small hours, consistently — not once, as a pattern:
+>
+> | hour | median | % below 70 |
+> |---|---|---|
+> | 01:00 | 112 | 4% |
+> | 02:00 | 94 | 18% |
+> | **03:00** | **77** | **31%** |
+> | 04:00 | 89 | 22% |
+> | 05:00 | 108 | 9% |
+>
+> 03:00 is the worst hour of your day by a wide margin — roughly one night in
+> three dips below 70 around then, and it climbs back on its own by 05:00.
+> That shape is worth showing whoever manages your basal rates.
+
+> **You:** anything I need to change soon?
+
+> **Claude:** *(calls `get_site_ages` and `get_device_status`)*
+>
+> Sensor is 9 days old, so it expires in about a day. Cannula is at 2 days.
+> Pump reservoir reads 18 units and the pump battery is at 22% — that's the one
+> I'd deal with tonight rather than tomorrow.
+
+*(Illustrative numbers, not anyone's real data.)*
+
 ## Tools
 
 **Right now**
