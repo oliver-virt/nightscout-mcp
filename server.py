@@ -30,6 +30,7 @@ import hmac
 import os
 import statistics
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastmcp import FastMCP
@@ -117,6 +118,63 @@ class BearerAuth(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+def _tir_stats(vals: list[float]) -> dict:
+    """Time-in-range, average, GMI and CV for a list of mg/dL readings.
+
+    Shared by `time_in_range` and `compare_periods` so the two can never
+    disagree about what "in range" means — a comparison built on a second copy
+    of these thresholds would eventually compare two different questions.
+    """
+    n = len(vals)
+    if not n:
+        return {"readings": 0}
+
+    def pct(lo, hi):
+        return round(100 * sum(1 for v in vals if lo <= v < hi) / n, 1)
+
+    mean = statistics.mean(vals)
+    sd = statistics.pstdev(vals) if n > 1 else 0
+    return {
+        "readings": n,
+        "units": UNITS,
+        "average": _fmt(mean),
+        "gmi_a1c_percent": round(3.31 + 0.02392 * mean, 1),
+        "cv_percent": round(100 * sd / mean, 1) if mean else None,
+        "very_low_lt54": pct(0, 54),
+        "low_54_70": pct(54, 70),
+        "in_range_70_180": pct(70, 180),
+        "high_180_250": pct(180, 250),
+        "very_high_ge250": pct(250, 10000),
+    }
+
+
+async def _sgv_since(days: float, until_days_ago: float = 0) -> list[dict]:
+    """Raw SGV entries in a window, newest-first as Nightscout returns them."""
+    now = datetime.now(timezone.utc)
+    start = int((now - timedelta(days=days + until_days_ago)).timestamp() * 1000)
+    end = int((now - timedelta(days=until_days_ago)).timestamp() * 1000)
+    return await _ns_get(
+        "/api/v1/entries/sgv.json",
+        {"count": 200000, "find[date][$gte]": start, "find[date][$lt]": end},
+    )
+
+
+async def _local_tz() -> timezone | ZoneInfo:
+    """The Nightscout profile's timezone, so "3am" means the user's 3am.
+
+    Binning by UTC hour would silently shift every pattern by the offset, which
+    is the kind of wrong that still looks like a plausible chart.
+    """
+    try:
+        p = await _ns_get("/api/v1/profile.json")
+        name = (p[0].get("store", {}).get(p[0].get("defaultProfile", ""), {}) or {}).get("timezone")
+        if name:
+            return ZoneInfo(name)
+    except Exception:
+        pass
+    return timezone.utc
+
+
 mcp = FastMCP("nightscout-readonly")
 
 
@@ -165,25 +223,7 @@ async def time_in_range(hours: float = 24) -> dict:
     vals = [x["sgv"] for x in e if x.get("sgv")]
     if not vals:
         return {"error": "no readings in window"}
-    n = len(vals)
-    def pct(lo, hi):
-        return round(100 * sum(1 for v in vals if lo <= v < hi) / n, 1)
-    mean = statistics.mean(vals)
-    sd = statistics.pstdev(vals) if n > 1 else 0
-    gmi = 3.31 + 0.02392 * mean  # GMI (%) from mean mg/dL
-    return {
-        "hours": hours,
-        "readings": n,
-        "units": UNITS,
-        "average": _fmt(mean),
-        "gmi_a1c_percent": round(gmi, 1),
-        "cv_percent": round(100 * sd / mean, 1) if mean else None,
-        "very_low_lt54": pct(0, 54),
-        "low_54_70": pct(54, 70),
-        "in_range_70_180": pct(70, 180),
-        "high_180_250": pct(180, 250),
-        "very_high_ge250": pct(250, 10000),
-    }
+    return {"hours": hours, **_tir_stats(vals)}
 
 
 @mcp.tool
@@ -238,6 +278,170 @@ async def server_status() -> dict:
     """Nightscout version, name and configured thresholds."""
     return await _ns_get("/api/v1/status.json")
 
+
+@mcp.tool
+async def get_site_ages() -> dict:
+    """How long since the cannula, sensor, insulin and pump battery were changed.
+
+    The question with a deadline: what is due for replacement.
+    """
+    try:
+        props = await _ns_get("/api/v2/properties/cage,sage,iage,bage")
+    except RuntimeError:
+        return {"error": "site-age plugins (cage/sage/iage/bage) not enabled on this Nightscout"}
+    labels = {
+        "cage": "cannula",
+        "sage": "sensor",
+        "iage": "insulin",
+        "bage": "pump_battery",
+    }
+    out = {}
+    for key, label in labels.items():
+        v = props.get(key) or {}
+        # `found` false means the plugin is on but has never seen the event —
+        # reporting age 0 there would read as "just changed", the opposite.
+        if not v or v.get("found") is False:
+            out[label] = {"known": False}
+            continue
+        out[label] = {
+            "known": True,
+            "days": v.get("days"),
+            "hours": v.get("hours"),
+            "age_hours": v.get("age"),
+            "changed_at": v.get("treatmentDate"),
+        }
+    return out
+
+
+@mcp.tool
+async def get_device_status() -> dict:
+    """Pump reservoir and battery, uploader battery, and loop health.
+
+    What is about to fail. `get_insulin_on_board` reads the same record but
+    only for IOB/COB; this is the hardware side of it.
+    """
+    d = await _ns_get("/api/v1/devicestatus.json", {"count": 1})
+    if not d:
+        return {"error": "no device status"}
+    s = d[0]
+    pump = s.get("pump") or {}
+    loop = s.get("loop") or {}
+    battery = pump.get("battery") or {}
+    return {
+        "time": s.get("created_at"),
+        "device": s.get("device"),
+        "uploader_battery_percent": (s.get("uploader") or {}).get("battery"),
+        "pump": {
+            "reservoir_units": pump.get("reservoir"),
+            "battery_percent": battery.get("percent"),
+            "battery_voltage": battery.get("voltage"),
+            "status": (pump.get("status") or {}).get("status"),
+            "last_seen": pump.get("clock"),
+        },
+        "loop": {
+            "last_success": loop.get("timestamp"),
+            # A recommendation the loop made is reported as loop STATE, never
+            # surfaced as a suggestion to act on — this server does not advise.
+            "enacted": bool(loop.get("enacted")),
+            "failure": (loop.get("failureReason") or None),
+        },
+    }
+
+
+@mcp.tool
+async def glucose_patterns(days: int = 14) -> dict:
+    """Glucose by hour of day over `days` — when highs and lows actually happen.
+
+    The retrospective question a graph is bad at answering: not "what is my
+    glucose", but "what time of day do I reliably go low". Binned in the
+    Nightscout profile's own timezone, so the hours mean what the user means.
+    """
+    e = await _sgv_since(days)
+    tz = await _local_tz()
+    buckets: dict[int, list[float]] = {h: [] for h in range(24)}
+    for x in e:
+        v = x.get("sgv")
+        ts = x.get("date")
+        if not v or not ts:
+            continue
+        hour = datetime.fromtimestamp(ts / 1000, tz).hour
+        buckets[hour].append(v)
+
+    total = sum(len(v) for v in buckets.values())
+    if not total:
+        return {"error": f"no readings in the past {days} days"}
+
+    hours = []
+    for h in range(24):
+        vals = buckets[h]
+        if not vals:
+            hours.append({"hour": h, "readings": 0})
+            continue
+        vals_sorted = sorted(vals)
+        n = len(vals_sorted)
+        hours.append({
+            "hour": h,
+            "readings": n,
+            "median": _fmt(statistics.median(vals_sorted)),
+            "p25": _fmt(vals_sorted[max(0, int(n * 0.25) - 1)]),
+            "p75": _fmt(vals_sorted[min(n - 1, int(n * 0.75))]),
+            "percent_below_70": round(100 * sum(1 for v in vals if v < 70) / n, 1),
+            "percent_above_180": round(100 * sum(1 for v in vals if v > 180) / n, 1),
+        })
+
+    worst_low = max((h for h in hours if h.get("readings")), key=lambda h: h["percent_below_70"])
+    worst_high = max((h for h in hours if h.get("readings")), key=lambda h: h["percent_above_180"])
+    return {
+        "days": days,
+        "timezone": str(tz),
+        "units": UNITS,
+        "readings": total,
+        "by_hour": hours,
+        "most_low_hour": {"hour": worst_low["hour"], "percent_below_70": worst_low["percent_below_70"]},
+        "most_high_hour": {"hour": worst_high["hour"], "percent_above_180": worst_high["percent_above_180"]},
+    }
+
+
+@mcp.tool
+async def compare_periods(days: int = 7) -> dict:
+    """Compare the last `days` against the `days` before that.
+
+    Answers "did the change help?" — which needs two windows measured the same
+    way, so both go through the same stats helper as `time_in_range`.
+    """
+    recent = [x["sgv"] for x in await _sgv_since(days) if x.get("sgv")]
+    prior = [x["sgv"] for x in await _sgv_since(days, until_days_ago=days) if x.get("sgv")]
+    if not recent or not prior:
+        return {"error": "not enough history to compare two windows"}
+
+    a, b = _tir_stats(prior), _tir_stats(recent)
+
+    def delta(key):
+        if a.get(key) is None or b.get(key) is None:
+            return None
+        return round(b[key] - a[key], 1)
+
+    return {
+        "days_per_window": days,
+        "previous": a,
+        "recent": b,
+        # Deltas are recent-minus-previous: positive means the number went up,
+        # which is good for in_range and bad for the rest. Direction is left to
+        # the reader on purpose; this server reports, it does not judge.
+        "change": {
+            k: delta(k)
+            for k in (
+                "average",
+                "gmi_a1c_percent",
+                "cv_percent",
+                "very_low_lt54",
+                "low_54_70",
+                "in_range_70_180",
+                "high_180_250",
+                "very_high_ge250",
+            )
+        },
+    }
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_request: Request) -> JSONResponse:

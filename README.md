@@ -13,17 +13,47 @@ Ask *"what's my glucose doing?"*, *"how was my time in range this week?"*, or
 
 ## Tools
 
+**Right now**
+
 | Tool | Returns |
 |---|---|
 | `get_current_glucose` | Latest reading, trend direction, and how old it is |
 | `get_recent_glucose` | Readings over the last N hours (default 3) |
-| `time_in_range` | Low / in-range / high split over N hours (default 24) |
+| `get_insulin_on_board` | Active insulin and carbs on board (Loop/AAPS) |
+| `get_device_status` | Pump reservoir and battery, uploader battery, loop health |
+| `get_site_ages` | Age of cannula, sensor, insulin and pump battery |
+
+**Over time**
+
+| Tool | Returns |
+|---|---|
+| `time_in_range` | Low / in-range / high split, average, GMI, CV% (default 24h) |
+| `glucose_patterns` | Glucose by hour of day — *when* you actually run low or high |
+| `compare_periods` | The last N days against the N before, with deltas |
 | `get_recent_treatments` | Boluses, carbs and site changes (default 12h) |
-| `get_insulin_on_board` | Active insulin, from Nightscout's own IOB calc |
+
+**Reference**
+
+| Tool | Returns |
+|---|---|
 | `get_profile` | Basal rates, ISF, carb ratio, targets |
 | `server_status` | Nightscout version and configured thresholds |
 
+`glucose_patterns` is the one worth knowing about. "What is my glucose" is a
+question a graph already answers; "what time of day do I reliably go low" is
+one it doesn't, and it's the kind of thing a model is good at picking out of
+two weeks of readings. Hours are binned in your Nightscout profile's own
+timezone, so 3am means your 3am.
+
 There are no write tools. The server cannot change anything in Nightscout.
+
+### Deliberately not exposed
+
+Nightscout's **bolus wizard preview** (`bwp`) returns a *suggested insulin
+amount*. Surfacing it would turn this from something that displays your data
+into something that suggests treatment — a different thing entirely, both for
+you and for how such software is regulated. Same reasoning for anything that
+computes a correction. Every tool here is a read.
 
 ## Security
 
