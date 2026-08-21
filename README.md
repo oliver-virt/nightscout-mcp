@@ -13,33 +13,20 @@ Ask *"what's my glucose doing?"*, *"how was my time in range this week?"*, or
 
 ## What it looks like
 
-> **You:** what has my glucose been doing overnight this past fortnight?
+<img src="docs/usage.png" alt="A conversation: asking what glucose has been doing overnight, and getting back an hour-by-hour breakdown showing a consistent 3am low" width="900">
 
-> **Claude:** *(calls `glucose_patterns`)*
->
-> You're running low in the small hours, consistently — not once, as a pattern:
->
-> | hour | median | % below 70 |
-> |---|---|---|
-> | 01:00 | 112 | 4% |
-> | 02:00 | 94 | 18% |
-> | **03:00** | **77** | **31%** |
-> | 04:00 | 89 | 22% |
-> | 05:00 | 108 | 9% |
->
-> 03:00 is the worst hour of your day by a wide margin — roughly one night in
-> three dips below 70 around then, and it climbs back on its own by 05:00.
-> That shape is worth showing whoever manages your basal rates.
+The question a graph is worst at. "What is my glucose" is already on a screen;
+*"what time of day do I reliably go low"* takes two weeks of readings and
+someone willing to count — which is the case for putting a model in front of
+this data at all.
 
-> **You:** anything I need to change soon?
+It answers the boring-but-urgent ones too: *"anything I need to change soon?"*
+reaches `get_site_ages` and `get_device_status` and tells you the sensor
+expires tomorrow and the pump battery is at 22%.
 
-> **Claude:** *(calls `get_site_ages` and `get_device_status`)*
->
-> Sensor is 9 days old, so it expires in about a day. Cannula is at 2 days.
-> Pump reservoir reads 18 units and the pump battery is at 22% — that's the one
-> I'd deal with tonight rather than tomorrow.
-
-*(Illustrative numbers, not anyone's real data.)*
+> Mock-up with invented numbers, not a capture of anyone's session. A real
+> screenshot would put someone's actual glucose values in a public repo
+> permanently — see the note above about what this is and isn't for.
 
 ## Tools
 
