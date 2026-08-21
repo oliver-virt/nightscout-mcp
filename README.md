@@ -49,6 +49,29 @@ expires tomorrow and the pump battery is at 22%.
 | `compare_periods` | The last N days against the N before, with deltas |
 | `get_recent_treatments` | Boluses, carbs and site changes (default 12h) |
 
+**Interactive**
+
+| Tool | Returns |
+|---|---|
+| `glucose_dashboard` | The overview as a chart where the client supports it, JSON everywhere |
+
+<img src="docs/dashboard.png" alt="Dashboard: average, time in range, GMI and CV as stat cards; a time-in-range bar; and percent-below-70 by hour of day with 3am highlighted" width="760">
+
+Built on [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview),
+so the tool returns **data** and the host renders the view in a sandboxed
+iframe. That split matters: the same JSON the chart draws from is what the
+model reads, so Claude can answer questions *about* the chart. An image it
+cannot see would make the conversation worse, not better.
+
+The range buttons don't fetch anything — they ask the host to call the tool
+again. The iframe holds no credential and never talks to Nightscout. There is
+also no charting CDN: the view is ~120 lines of hand-written HTML with an empty
+CSP, because a third party in the render path for glucose data is not a
+dependency worth taking for rounded corners.
+
+Requires a client that supports the MCP Apps extension. Everywhere else the
+same tool returns the same JSON and nothing is lost.
+
 **Reference**
 
 | Tool | Returns |

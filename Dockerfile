@@ -9,6 +9,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
+# The dashboard markup is read at request time, so it ships as a file rather
+# than a string baked into the module — editable as HTML, diffable as HTML.
+COPY ui/ ./ui/
 USER app
 
 EXPOSE 8787
