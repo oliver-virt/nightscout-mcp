@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Run as a non-root user. The process only makes outbound HTTPS calls and
 # listens on one port, so it never needs to own anything in the image.
