@@ -27,13 +27,16 @@ Env:
   TRUSTED_PROXY_IPS  optional  see main()
 """
 import hmac
+import json
 import os
 import statistics
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
 from fastmcp import FastMCP
+from fastmcp.apps import AppConfig, ResourceCSP
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -442,6 +445,78 @@ async def compare_periods(days: int = 7) -> dict:
             )
         },
     }
+
+# ---- interactive dashboard (MCP Apps) --------------------------------------
+#
+# The tool returns DATA; the resource below returns the view that draws it. That
+# split is the whole point of the extension: the host renders the HTML in a
+# sandboxed iframe, and the same JSON the chart draws from is what the model
+# reads to answer questions about it. A picture the model cannot see would make
+# the conversation worse, not better.
+#
+# The view is served from disk rather than embedded so it stays editable as HTML,
+# and it loads NO external origin — an empty CSP. A CDN in the render path for
+# glucose data is a third party in a place that does not need one.
+_UI = Path(__file__).parent / "ui" / "glucose.html"
+
+
+@mcp.tool(
+    app=AppConfig(
+        resource_uri="ui://nightscout/glucose.html",
+        csp=ResourceCSP(connect_domains=[], resource_domains=[]),
+    )
+)
+async def glucose_dashboard(days: int = 14) -> str:
+    """Glucose overview for the past `days`: time-in-range, GMI, CV, and the
+    hourly low/high pattern. Renders as an interactive chart where the client
+    supports it, and returns the same numbers as JSON either way."""
+    e = await _sgv_since(days)
+    tz = await _local_tz()
+    vals = [x["sgv"] for x in e if x.get("sgv")]
+    if not vals:
+        return json.dumps({"error": f"no readings in the past {days} days"})
+
+    buckets: dict[int, list[float]] = {h: [] for h in range(24)}
+    for x in e:
+        if x.get("sgv") and x.get("date"):
+            buckets[datetime.fromtimestamp(x["date"] / 1000, tz).hour].append(x["sgv"])
+
+    by_hour = []
+    for h in range(24):
+        b = buckets[h]
+        by_hour.append(
+            {
+                "hour": h,
+                "readings": len(b),
+                "median": _fmt(statistics.median(b)) if b else None,
+                "percent_below_70": round(100 * sum(1 for v in b if v < 70) / len(b), 1) if b else 0,
+                "percent_above_180": round(100 * sum(1 for v in b if v > 180) / len(b), 1) if b else 0,
+            }
+        )
+
+    withdata = [h for h in by_hour if h["readings"]]
+    worst = max(withdata, key=lambda h: h["percent_below_70"]) if withdata else None
+    return json.dumps(
+        {
+            "days": days,
+            "units": UNITS,
+            "timezone": str(tz),
+            "summary": _tir_stats(vals),
+            "by_hour": by_hour,
+            "most_low_hour": (
+                {"hour": worst["hour"], "percent_below_70": worst["percent_below_70"]}
+                if worst
+                else None
+            ),
+        }
+    )
+
+
+@mcp.resource("ui://nightscout/glucose.html", mime_type="text/html")
+def glucose_view() -> str:
+    """The dashboard markup. Static, self-contained, no network of its own."""
+    return _UI.read_text(encoding="utf-8")
+
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_request: Request) -> JSONResponse:

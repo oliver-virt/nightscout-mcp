@@ -1,0 +1,124 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Glucose</title><style>
+  :root{
+    --bg:#0d141c; --card:#141d28; --line:#223040; --ink:#e8eff6; --muted:#8598ab;
+    --low:#ff9166; --high:#f0c04a; --ok:#5fd1a0; --trace:#7fb0dd;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);padding:16px;
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;
+        padding:11px 14px;flex:1;min-width:112px}
+  .stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;line-height:1.2}
+  .stat span{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  h2{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+     font-weight:600;margin-bottom:10px}
+  .bars{display:flex;align-items:flex-end;gap:3px;height:120px}
+  .bar{flex:1;position:relative;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+  .bar i{display:block;border-radius:3px 3px 0 0;background:var(--trace)}
+  .bar.low i{background:var(--low)}
+  .bar em{position:absolute;bottom:-17px;left:0;right:0;text-align:center;
+          font-style:normal;font-size:9px;color:var(--muted)}
+  .axis{height:18px}
+  .tir{display:flex;height:26px;border-radius:6px;overflow:hidden;margin-bottom:7px}
+  .tir div{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#0d141c}
+  .legend{display:flex;gap:14px;font-size:11px;color:var(--muted)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .range{display:flex;gap:6px;margin-bottom:14px}
+  .range button{background:var(--card);border:1px solid var(--line);color:var(--muted);
+    border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit}
+  .range button[aria-pressed="true"]{border-color:var(--trace);color:var(--ink)}
+  .note{margin-top:12px;font-size:11px;color:var(--muted)}
+</style></head><body>
+
+<div class="range" id="range">
+  <button data-days="1"  aria-pressed="false">24h</button>
+  <button data-days="7"  aria-pressed="false">7 days</button>
+  <button data-days="14" aria-pressed="true">14 days</button>
+</div>
+
+<div class="row" id="stats"></div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>Time in range</h2>
+  <div class="tir" id="tir"></div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--low)"></i>low</span>
+    <span><i class="dot" style="background:var(--ok)"></i>70–180</span>
+    <span><i class="dot" style="background:var(--high)"></i>high</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Percent below 70, by hour of day</h2>
+  <div class="bars" id="bars"></div>
+  <div class="axis"></div>
+  <div class="note" id="worst"></div>
+</div>
+
+<script>
+// Rendering only. Every number here arrives from the server; nothing is derived
+// or corrected in the browser, so what you see is what the tool returned.
+function render(d) {
+  if (!d || !d.by_hour) return;
+  const s = d.summary || {};
+  document.getElementById('stats').innerHTML = [
+    ['average', s.average, d.units || ''],
+    ['in range', s.in_range_70_180, '%'],
+    ['GMI', s.gmi_a1c_percent, '%'],
+    ['CV', s.cv_percent, '%'],
+  ].map(([k, v, u]) => `<div class="stat"><span>${k}</span><b>${v ?? '–'}${u}</b></div>`).join('');
+
+  const low = (s.very_low_lt54 || 0) + (s.low_54_70 || 0);
+  const inr = s.in_range_70_180 || 0;
+  const high = (s.high_180_250 || 0) + (s.very_high_ge250 || 0);
+  document.getElementById('tir').innerHTML =
+    [[low,'var(--low)'],[inr,'var(--ok)'],[high,'var(--high)']]
+      .map(([v,c]) => v > 3 ? `<div style="width:${v}%;background:${c}">${Math.round(v)}%</div>` : '')
+      .join('');
+
+  const hours = d.by_hour;
+  const peak = Math.max(...hours.map(h => h.percent_below_70 || 0), 1);
+  document.getElementById('bars').innerHTML = hours.map(h => {
+    const v = h.percent_below_70 || 0;
+    const hot = v >= peak * 0.75 && v > 0;
+    return `<div class="bar ${hot ? 'low' : ''}" title="${h.hour}:00 — ${v}% below 70">
+              <i style="height:${Math.max(2, (v / peak) * 100)}%"></i>
+              <em>${h.hour % 3 === 0 ? h.hour : ''}</em></div>`;
+  }).join('');
+
+  const w = d.most_low_hour;
+  document.getElementById('worst').textContent = w
+    ? `Worst hour: ${String(w.hour).padStart(2,'0')}:00 — ${w.percent_below_70}% of readings below 70.`
+    : '';
+}
+
+// MCP Apps host bridge. The host pushes the tool result in; the range buttons
+// ask the host to call the tool again rather than fetching anything themselves —
+// the iframe holds no credential and never talks to Nightscout.
+let rpc = 0;
+function call(method, params) {
+  parent.postMessage({ jsonrpc: '2.0', id: ++rpc, method, params }, '*');
+}
+window.addEventListener('message', (e) => {
+  const m = e.data || {};
+  if (m.method === 'ui/render' || m.method === 'notifications/tool_result') {
+    try { render(typeof m.params?.data === 'string' ? JSON.parse(m.params.data) : m.params?.data); }
+    catch (_) {}
+  }
+  if (m.result?.content?.[0]?.text) {
+    try { render(JSON.parse(m.result.content[0].text)); } catch (_) {}
+  }
+});
+document.getElementById('range').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...e.currentTarget.children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  call('tools/call', { name: 'glucose_dashboard', arguments: { days: +b.dataset.days } });
+});
+call('ui/initialize', {});
+
+if (window.__DEMO__) render(window.__DEMO__);
+</script>
+</body></html>
