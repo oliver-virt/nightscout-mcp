@@ -1,54 +1,62 @@
 <!doctype html><html><head><meta charset="utf-8"><style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#0d141c;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
-       padding:34px;width:900px}
-  .card{background:#141d28;border:1px solid #223040;border-radius:14px;padding:26px 28px}
-  .turn{display:flex;gap:13px;align-items:flex-start}
-  .turn + .turn{margin-top:22px;padding-top:22px;border-top:1px solid #1e2b3a}
-  .who{flex:0 0 26px;height:26px;border-radius:7px;display:flex;align-items:center;
-       justify-content:center;font-size:11px;font-weight:700;letter-spacing:.02em}
-  .you{background:#2b3a4d;color:#9fb3c8}
-  .ai{background:#c96442;color:#fff}
-  .body{flex:1;min-width:0}
-  .q{color:#e8eff6;font-size:16.5px;line-height:1.5}
-  .tool{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
-        color:#7fa8cc;background:#111b26;border:1px solid #223040;border-radius:6px;
-        padding:3px 9px;margin-bottom:11px}
-  p{color:#c3d0dc;font-size:14.5px;line-height:1.62;margin-bottom:12px}
-  table{border-collapse:collapse;margin:4px 0 13px;font-size:13.5px}
-  th{color:#77879a;font-weight:600;text-align:left;padding:0 26px 7px 0;font-size:11.5px;
-     text-transform:uppercase;letter-spacing:.06em}
-  td{color:#cdd9e5;padding:5px 26px 5px 0;font-variant-numeric:tabular-nums}
-  tr.hit td{color:#ff9166;font-weight:650}
-  .bar{display:inline-block;height:7px;border-radius:4px;background:#2f4055;vertical-align:middle}
-  .bar.hot{background:#ff9166}
-  .note{color:#8fa0b2;font-size:13px;font-style:italic}
+  body{background:#0b0e14;padding:26px 30px;width:940px;
+       font:14.5px/1.72 "SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace;
+       color:#c9d4e0;-webkit-font-smoothing:antialiased}
+  .prompt{color:#6f8296}
+  .user{color:#e9f0f7}
+  .b{color:#c96442}
+  .dim{color:#6f8296}
+  .tool{color:#7fb0dd}
+  .arg{color:#c3d0dc}
+  .ok{color:#5fd1a0}
+  .warn{color:#ff9166}
+  .row{margin:0}
+  .gap{height:15px}
+  .ind{padding-left:23px}
+  table{border-collapse:collapse;margin:2px 0 2px 23px}
+  td{padding:1px 20px 1px 0;font-variant-numeric:tabular-nums;color:#c9d4e0}
+  td.h{color:#8fa0b2}
+  tr.hot td{color:#ff9166}
+  .bar{color:#3f5468}
+  .bar.hot{color:#ff9166}
 </style></head><body>
-<div class="card">
 
-  <div class="turn">
-    <div class="who you">O</div>
-    <div class="body"><div class="q">what has my glucose been doing overnight this past fortnight?</div></div>
-  </div>
+<div class="row"><span class="prompt">&gt; </span><span class="user">what has my glucose been doing overnight this past fortnight?</span></div>
+<div class="gap"></div>
 
-  <div class="turn">
-    <div class="who ai">✳</div>
-    <div class="body">
-      <span class="tool">glucose_patterns(days: 14)</span>
-      <p>You're running low in the small hours consistently — not once, as a pattern:</p>
-      <table>
-        <tr><th>hour</th><th>median</th><th>below&nbsp;70</th><th></th></tr>
-        <tr><td>01:00</td><td>112</td><td>4%</td><td><span class="bar" style="width:8px"></span></td></tr>
-        <tr><td>02:00</td><td>94</td><td>18%</td><td><span class="bar" style="width:34px"></span></td></tr>
-        <tr class="hit"><td>03:00</td><td>77</td><td>31%</td><td><span class="bar hot" style="width:59px"></span></td></tr>
-        <tr><td>04:00</td><td>89</td><td>22%</td><td><span class="bar" style="width:42px"></span></td></tr>
-        <tr><td>05:00</td><td>108</td><td>9%</td><td><span class="bar" style="width:17px"></span></td></tr>
-      </table>
-      <p>03:00 is the worst hour of your day by a wide margin — roughly one night in three
-         dips below 70 around then, and it climbs back on its own by 05:00. That shape is
-         worth showing whoever manages your basal rates.</p>
-      <p class="note">Illustrative data. Read-only — this can't change anything in Nightscout.</p>
-    </div>
-  </div>
+<div class="row"><span class="b">⏺</span> <span class="tool">glucose_patterns</span><span class="dim">(</span><span class="arg">days: 14</span><span class="dim">)</span></div>
+<div class="row ind"><span class="dim">⎿  3,891 readings · Asia/Jerusalem</span></div>
+<div class="gap"></div>
 
-</div></body></html>
+<div class="row"><span class="b">⏺</span> You're running low in the small hours consistently — not once, as a pattern:</div>
+<div class="gap" style="height:9px"></div>
+<table>
+  <tr><td class="h">hour</td><td class="h">median</td><td class="h">below 70</td><td></td></tr>
+  <tr><td>01:00</td><td>112</td><td>4%</td><td class="bar">▏</td></tr>
+  <tr><td>02:00</td><td>94</td><td>18%</td><td class="bar">▍▍▍</td></tr>
+  <tr class="hot"><td>03:00</td><td>77</td><td>31%</td><td class="bar hot">█████</td></tr>
+  <tr><td>04:00</td><td>89</td><td>22%</td><td class="bar">▊▊▊▊</td></tr>
+  <tr><td>05:00</td><td>108</td><td>9%</td><td class="bar">▎</td></tr>
+</table>
+<div class="gap" style="height:9px"></div>
+<div class="row ind" style="padding-left:23px">03:00 is the worst hour of your day by a wide margin — roughly one night in</div>
+<div class="row ind">three dips below 70 around then, and it climbs back on its own by 05:00.</div>
+<div class="row ind">That shape is worth showing whoever manages your basal rates.</div>
+<div class="gap"></div>
+
+<div class="row"><span class="prompt">&gt; </span><span class="user">anything I need to change soon?</span></div>
+<div class="gap"></div>
+
+<div class="row"><span class="b">⏺</span> <span class="tool">get_site_ages</span><span class="dim">()</span></div>
+<div class="row ind"><span class="dim">⎿  sensor 9d · cannula 2d · insulin 3d</span></div>
+<div class="row"><span class="b">⏺</span> <span class="tool">get_device_status</span><span class="dim">()</span></div>
+<div class="row ind"><span class="dim">⎿  reservoir 18u · pump battery 22% · uploader 74%</span></div>
+<div class="gap"></div>
+
+<div class="row"><span class="b">⏺</span> Sensor expires in about a day. The one I'd deal with tonight is the</div>
+<div class="row ind"><span class="warn">pump battery at 22%</span> — reservoir is only 18 units too.</div>
+<div class="gap"></div>
+<div class="row"><span class="dim">   Illustrative session. Every tool here is read-only.</span></div>
+
+</body></html>

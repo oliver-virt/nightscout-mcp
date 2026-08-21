@@ -1,32 +1,42 @@
 # nightscout-mcp
 
-A read-only [MCP](https://modelcontextprotocol.io) server that exposes your
-[Nightscout](https://nightscout.github.io) data to Claude.
+**Ask Claude about your Nightscout CGM data.** Read-only — it cannot change
+anything in Nightscout.
 
-Ask *"what's my glucose doing?"*, *"how was my time in range this week?"*, or
-*"how much insulin is still active?"* and get an answer from your own data.
+<img src="docs/usage.png" alt="A terminal session: asking what glucose has been doing overnight and getting an hour-by-hour breakdown showing a consistent 3am low, then asking what needs changing and getting sensor age and pump battery" width="940">
 
-> **Not a medical device.** This is a read-only view of data you already have.
-> Do not make treatment decisions from it. Confirm anything that matters
-> against your CGM, pump and clinician. Readings can be stale, missing, or
-> wrong, and an LLM can misread them.
+> **Not a medical device.** Don't make treatment decisions from it. Readings
+> can be stale, missing or wrong, and an LLM can misread them.
+>
+> *(Illustrative session — invented numbers, not a capture of anyone's data.)*
 
-## What it looks like
+## Connect it
 
-<img src="docs/usage.png" alt="A conversation: asking what glucose has been doing overnight, and getting back an hour-by-hour breakdown showing a consistent 3am low" width="900">
+Point your client at your deployed server and send a bearer token. Standing the
+server up is [further down](#setup).
 
-The question a graph is worst at. "What is my glucose" is already on a screen;
-*"what time of day do I reliably go low"* takes two weeks of readings and
-someone willing to count — which is the case for putting a model in front of
-this data at all.
+**Claude** (web, desktop, mobile) — Customize → Connectors → **Add custom connector**
 
-It answers the boring-but-urgent ones too: *"anything I need to change soon?"*
-reaches `get_site_ages` and `get_device_status` and tells you the sensor
-expires tomorrow and the pump battery is at 22%.
+| field | value |
+|---|---|
+| URL | `https://your-host.example.com/mcp` |
+| header | `authorization` |
+| value | `Bearer <your MCP_BEARER>` |
 
-> Mock-up with invented numbers, not a capture of anyone's session. A real
-> screenshot would put someone's actual glucose values in a public repo
-> permanently — see the note above about what this is and isn't for.
+Include the word `Bearer` and the space — Claude sends the value verbatim and
+adds no prefix of its own. Request-header auth is a Claude beta; if you don't
+see a **Request headers** section, ask Anthropic for access.
+
+**Claude Code**
+
+```bash
+claude mcp add --transport http nightscout https://your-host.example.com/mcp \
+  --header "Authorization: Bearer <your MCP_BEARER>"
+```
+
+**Anything else that speaks MCP** — this is a standard streamable-HTTP server.
+Give it the `/mcp` URL and an `Authorization: Bearer …` header. Verified with
+Claude, Claude Code and FastMCP's own client; nothing in it is Claude-specific.
 
 ## Tools
 
@@ -119,6 +129,7 @@ deliberately strict:
 and reads nothing.
 
 ## Setup
+<a id="setup"></a>
 
 ### 1. Make a read-only Nightscout token
 
