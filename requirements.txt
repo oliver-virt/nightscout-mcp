@@ -1,6 +1,6 @@
 # 3.4 is where AppConfig/ResourceCSP land — the MCP Apps dashboard needs them.
 # The read-only tools work on 2.x; only glucose_dashboard requires 3.4.
-fastmcp>=3.4.0
+fastmcp>=4.0.11
 httpx>=0.27
 uvicorn>=0.30
 starlette>=0.37
